@@ -1,11 +1,9 @@
 # galaxypad
 ![Custom Cosmic Spirit in Freezy Flake Galaxy](https://raw.githubusercontent.com/SunakazeKun/galaxypad/master/SCREENSHOT.png)
 
-**galaxypad** is a Python command-line tool to generate input playback files (PAD files) while playing **Super Mario Galaxy 2**. The tool reads relevant information from [Dolphin Emulator](https://dolphin-emu.org/)'s emulated game memory and automatically produces a PAD file after recording stopped. PAD files are used by the game to control player input for [Tip Networks](https://www.mariowiki.com/Tip_Network) and [Cosmic Spirits](https://www.mariowiki.com/Cosmic_Spirit).
+**galaxypad** is a Python command-line tool to record input playback files (PAD files) for [Tip Networks](https://www.mariowiki.com/Tip_Network) and [Cosmic Spirits](https://www.mariowiki.com/Cosmic_Spirit) in **Super Mario Galaxy 2**. The tool reads relevant information from [Dolphin Emulator](https://dolphin-emu.org/)'s emulated game memory and automatically produces a PAD file after recording stopped. The tool requires at least **Python 3.10**. It should also work with 3.11 and newer versions, but this hasn't been tested. Furthermore, it uses [py-dolphin-memory-engine](https://github.com/henriquegemignani/py-dolphin-memory-engine) to interact with Dolphin's game memory. In order to record player input during gameplay, [Syati](https://github.com/SunakazeKun/Syati)'s *PadRecord* code is required to supply the information from the game to this tool.
 
-In order to record player input during gameplay, [Syati](https://github.com/SunakazeKun/Syati)'s *PadRecord* code is required to supply the information from the game to this tool. The tool requires at least **Python 3.10**. It should also work with 3.11 and newer versions, but this hasn't been tested. Furthermore, the tool uses [py-dolphin-memory-engine](https://github.com/henriquegemignani/py-dolphin-memory-engine) to interact with Dolphin's game memory.
-
-The tool is available on PyPI, meaning that you can easily install it with pip:
+It is available on PyPI, meaning that you can easily install it with pip:
 ```
 pip install galaxypad
 ```
