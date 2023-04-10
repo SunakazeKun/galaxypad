@@ -8,17 +8,22 @@ It is available on PyPI, meaning that you can easily install it with pip:
 pip install galaxypad
 ```
 
+# Limitations
+There are gameplay-related aspects that Tip Networks and Cosmic Spirits don't account for. Keep these in mind when you want to record and play inputs!
+
+- You should only record playback when playing as Mario. Both objects will be disabled when playing as Luigi.
+- Both objects disable the Star Pointer completely. Thus, Mario can't interact with objects that require the Star Pointer, for example Pull Stars and Grapple Flowers.
+- The game's pseudo-random number generator (PRNG) won't be reseeded to account for random events, such as enemies moving in random directions. Therefore, it can happen in some scenarios that the player gets damaged by enemies.
+
 # Usage
 In this section, it is assumed that the game you want to record player input in already uses Syati's *PadRecord* code. The general usage is this:
 ```
-usage: galaxypad [-h] [-address [ADDRESS]] output_folder_path save_data_path save_data_index
+usage: galaxypad [-h] [-address [ADDRESS]] output_folder_path
 
 Record PAD playback in SMG2 from Dolphin memory.
 
 positional arguments:
   output_folder_path  folder to save PAD files to
-  save_data_path      GameData.bin file to extract game data from
-  save_data_index     player save slot index, starts at 1, usually ends at 3
 
 options:
   -h, --help          show this help message and exit
@@ -26,25 +31,6 @@ options:
 ```
 
 The ``-address`` option is not required, as the tool assumes ``PadRecordInfo*`` is supplied at ``0x80003FFC`` by default.
-
-By default, Dolphin Emulator saves Super Mario Galaxy 2 save files to ``C:/User/<YOURNAME>/Documents/Dolphin Emulator/Wii/title/00010000/<HEXID>/data/GameData.bin`` where ``<YOURNAME>`` is your username and ``<HEXID>`` is your game's ID. However, the ID depends on the version played:
-
-| Version | Hexadecimal Game ID |
-| ------- | ------------ |
-| **SB4E** (Americas) | ``53423445`` |
-| **SB4P** (Europe/Australia) | ``53423450`` |
-| **SB4J** (Japan) | ``5342344a`` |
-| **SB4K** (South Korea) | ``5342344b`` |
-| **SB4W** (Taiwan/Hong Kong) | ``53423457`` |
-
-
-Super Mario Galaxy 2 has three save slots with the following indexes.
-
-| Index | Slot |
-| ----- | ---- |
-| 1 | Left |
-| 2 | Center |
-| 3 | Right |
 
 # Recording
 Before you can record playback, you need to add the following things in your galaxy first:
@@ -57,20 +43,18 @@ Now you are ready to use the tool:
 1. Launch the modded game in Dolphin and start this command-line tool like explained in previous sections.
 3. While the game is running, pay attention to the tool's console output to verify that everything is running correctly.
 4. Once you are in the desired galaxy, go to where you placed PadRecordHelper. It doesn't use a model, but an A button icon will be displayed on the screen when you are close to it.
-5. Once you press A, the scene will reset. After the scene reloaded, the recording will start.
+5. Once you press A, the scene will reset. After the scene has reloaded, the recording will start.
 6. If you desire to stop recording, press 2 on the first player's Wiimote.
 
-The tool keeps you informed about its current state and it should inform you when something goes wrong. Here's an example from one of my tests:
+The tool keeps you informed about its current state, and it should inform you when something goes wrong. Here's an example from one of my tests:
 ```
-Loading save data from 'D:\Dokumente\Dolphin Emulator\Wii\title\00010000\53423450\data\GameData.bin'...
-Extracted game data for player #1!
 Waiting for Dolphin...
 Hooked to Dolphin, game ID is SB4P!
 Searching for PadRecorderInfo* at 0x80003FFC...
 Waiting for PadRecordHelper...
-Started recording for spawn ID 2 in RedBlueExGalaxy!
+Started recording for spawn ID 0 in RedBlueExGalaxy!
 Stopped recording!
-Dumped 629 KPAD frames (approx. 10 seconds) to '.\RedBlueExGalaxy\Dreamer2.pad'.
+Dumped 3075 KPAD frames (approx. 51 seconds) to '.\RedBlueExGalaxy\Dreamer0.pad'.
 ```
 
 After recording, you can build a Ghost.arc containing the PAD file. However, this is beyond the scope of this tool. In final releases of your levels, you don't want players to interact with PadRecordHelper objects, so make sure to remove them once they are not needed anymore.

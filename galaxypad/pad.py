@@ -2,12 +2,12 @@ from __future__ import annotations
 from io import BytesIO
 
 import sys
+import time
 import os.path
 import struct
 import dolphin_memory_engine
 
-__all__ = ["write_pad_header", "write_game_data", "write_packet_header", "compress_kpad_states", "align_stream_32",
-           "calc_memory_checksum", "extract_save_file_header", "extract_save_block_offsets"]
+__all__ = ["write_pad_header", "write_game_data", "write_packet_header", "compress_kpad_states", "align_stream_32"]
 
 
 def validate_ptr(name: str):
@@ -40,6 +40,8 @@ OFFSET_RECORDER_MODE = 0x08
 OFFSET_STAGE_NAME_PTR = 0x0C
 OFFSET_RESTART_ID = 0x10
 OFFSET_RESTART_ZONE_ID = 0x14
+OFFSET_BACKUP_GAME_DATA_PTR = 0x18
+OFFSET_BACKUP_GAME_DATA_SIZE = 0x1C
 
 
 def dolphin_get_game_id() -> str:
@@ -148,6 +150,20 @@ def dolphin_read_kpad_statuses(pad_recorder_info_ptr: int) -> list[bytes]:
     return statuses
 
 
+@validate_ptr("PadRecorderInfo*")
+def dolphin_read_backup_game_data(pad_recorder_info_ptr: int) -> bytes:
+    """
+    Reads the GameData backup associated with the PadRecordInfo in Dolphin's emulated game memory and returns it.
+
+    :param pad_recorder_info_ptr: the pointer to PadRecordInfo.
+    :return: the GameData backup read.
+    """
+    backup_ptr = dolphin_read_u32(pad_recorder_info_ptr + OFFSET_BACKUP_GAME_DATA_PTR)
+    backup_size = dolphin_read_u32(pad_recorder_info_ptr + OFFSET_BACKUP_GAME_DATA_SIZE)
+
+    return dolphin_memory_engine.read_bytes(backup_ptr, backup_size)
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # PAD writer helpers
 
@@ -225,104 +241,10 @@ def align_stream_32(stream):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# GameData.bin helpers
+# GameData helpers
 
-def calc_memory_checksum(data: bytes | bytearray, offset: int, length: int) -> int:
-    """
-    Calculates the ``MemoryUtil`` hash over the specified bytes and returns it. The number of bytes should be even.
-
-    :param data: the buffer containing the bytes to calculate the hash over.
-    :param offset: the offset from which to start calculating the hash.
-    :param length: the number of bytes to be hashed.
-    :return: the calculated hash.
-    """
-    hi = 0
-    lo = 0
-
-    for _ in range(length // 2):
-        word = data[offset] << 8 | data[offset+1]
-        offset += 2
-        hi += word
-        lo += ~word
-
-    return (hi & 0xFFFF) << 16 | lo & 0xFFFF
-
-
-def extract_save_file_header(data: bytes | bytearray, offset: int) -> tuple[int, int, int, int]:
-    """
-    Extracts the save data's header information and returns it. This consists of the saved hash, the number of players,
-    the number of save blocks and the total save data size.
-
-    :param data: the buffer containing the save data.
-    :param offset: the save data's starting offset into the buffer.
-    :return: a tuple consisting of the information.
-    """
-    return struct.unpack_from(">4I", data, offset)
-
-
-def extract_save_block_offsets(data: bytes | bytearray, offset: int, blocks_count: int) -> dict[str, int]:
-    """
-    Extracts name:offset pairs for the save data blocks contained in the specified save data.
-
-    :param data: the buffer containing the save data.
-    :param offset: the offset to the save data blocks.
-    :param blocks_count: the number of save data blocks.
-    :return: the table of name:offset pairs.
-    """
-    offsets: dict[str, int] = {}
-
-    for _ in range(blocks_count):
-        raw_block_name, block_offset = struct.unpack_from(">12sI", data, offset)
-        block_name = raw_block_name.decode("ascii").strip("\0")
-        offset += 0x10
-
-        offsets[block_name] = block_offset
-
-    return offsets
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-def extract_game_data_from_save_file(save_file_path: str, index: int) -> bytes | None:
-    # 1 - Validate path
-    if not os.path.exists(save_file_path):
-        print(f"Error! Save file '{save_file_path}' doesn't exist!", file=sys.stderr)
-        return None
-    if not os.path.isfile(save_file_path):
-        print(f"Error! Path '{save_file_path}' is not a file!", file=sys.stderr)
-        return None
-
-    # 2 - Read & validate GameData file
-    print(f"Loading save data from '{save_file_path}'...")
-
-    with open(save_file_path, "rb") as f:
-        data = f.read()
-
-    if len(data) < 16:
-        print("Error! Save data is too small!", file=sys.stderr)
-
-    calculated_hash = calc_memory_checksum(data, 0x4, len(data) - 4)
-    saved_hash, user_files_count, save_blocks_count, _ = extract_save_file_header(data, 0)
-
-    if saved_hash != calculated_hash:
-        print(f"Error! Save data appears to be corrupted!", file=sys.stderr)
-        return None
-
-    if index < 1 or index > user_files_count:
-        print(f"Error! Save data does not contain data for player #{index}", file=sys.stderr)
-        return None
-
-    # 3 - Locate & extract GameData
-    save_blocks = extract_save_block_offsets(data, 0x10, save_blocks_count)
-    game_data_name = f"user{index}"
-
-    if game_data_name not in save_blocks:
-        print(f"Error! Save data does not contain GameData block for player #{index}!", file=sys.stderr)
-        return None
-
-    src = BytesIO(data)
-    src.seek(save_blocks[game_data_name])
+def truncate_game_data(game_data: bytes) -> bytes:
+    src = BytesIO(game_data)
     game_data_header = src.read(4)
     sections_count = game_data_header[0x1]
 
@@ -337,34 +259,29 @@ def extract_game_data_from_save_file(save_file_path: str, index: int) -> bytes |
         dest.write(section_header)
         dest.write(section_data)
 
-    print(f"Extracted game data for player #{index}!")
-
     return dest.getbuffer().tobytes()
 
 
-def record_pad_from_dolphin(output_folder_path: str, save_data_path: str, save_data_index: int,
-                            addr_pad_recorder_info_ptr: int = ADDR_PAD_RECORDER_INFO_PTR):
+# ----------------------------------------------------------------------------------------------------------------------
+# Main functionality
+
+def record_pad_from_dolphin(output_folder_path: str, addr_pad_recorder_info_ptr: int = ADDR_PAD_RECORDER_INFO_PTR):
     pad_recorder_info_ptr = 0
     recorder_state = RECORDER_MODE_WAITING
     game_id = UNINITIALIZED_GAME_ID
 
-    # 1 - Validate the paths
     if os.path.exists(output_folder_path) and not os.path.isdir(output_folder_path):
         print(f"Error! Path '{output_folder_path}' is not a folder!", file=sys.stderr)
 
-    # 2 - Load UserFile
-    game_data = extract_game_data_from_save_file(save_data_path, save_data_index)
-
-    if game_data is None:
-        return
-
-    # 3 - Hook to Dolphin and check if game ID is supported
+    # 2 - Hook to Dolphin and check if game ID is supported
     print("Waiting for Dolphin...")
 
     while not dolphin_memory_engine.is_hooked():
+        sleep_millis(500)
         dolphin_memory_engine.hook()
 
     while game_id == UNINITIALIZED_GAME_ID:
+        sleep_millis(500)
         game_id = dolphin_get_game_id()
 
     print(f"Hooked to Dolphin, game ID is {game_id}!")
@@ -372,15 +289,17 @@ def record_pad_from_dolphin(output_folder_path: str, save_data_path: str, save_d
     if game_id not in VALID_GAME_IDS:
         print("WARNING! Detected game's ID does not appear to be SMG2, tool may fail!")
 
-    # 4 - Find PadRecorderInfo and wait for recording
+    # 3 - Find PadRecorderInfo and wait for recording
     print(f"Searching for PadRecorderInfo* at 0x{addr_pad_recorder_info_ptr:08X}...")
 
     while pad_recorder_info_ptr == 0:
+        sleep_millis(250)
         pad_recorder_info_ptr = dolphin_read_u32(addr_pad_recorder_info_ptr)
 
     print("Waiting for PadRecordHelper...")
 
-    while recorder_state in [RECORDER_MODE_WAITING, RECORDER_MODE_PREPARING]:
+    while recorder_state == RECORDER_MODE_WAITING:
+        sleep_millis(250)
         recorder_state = dolphin_read_recorder_mode(pad_recorder_info_ptr)
 
     if recorder_state == RECORDER_MODE_STOPPED:
@@ -388,10 +307,16 @@ def record_pad_from_dolphin(output_folder_path: str, save_data_path: str, save_d
         dolphin_memory_engine.un_hook()
         return
 
+    game_data = dolphin_read_backup_game_data(pad_recorder_info_ptr)
+    game_data = truncate_game_data(game_data)
+
+    while recorder_state == RECORDER_MODE_PREPARING:
+        sleep_millis(250)
+        recorder_state = dolphin_read_recorder_mode(pad_recorder_info_ptr)
+
     # 5 - Get general information and prepare output
     stage_name = dolphin_read_stage_name(pad_recorder_info_ptr)
     restart_id = dolphin_read_restart_id(pad_recorder_info_ptr)
-    next_frame = -1
     total_frames = 0
 
     print(f"Started recording for spawn ID {restart_id} in {stage_name}!")
@@ -407,17 +332,24 @@ def record_pad_from_dolphin(output_folder_path: str, save_data_path: str, save_d
         current_packet_index = 0
         previous_state = bytearray(240)
 
+        current_frame = dolphin_read_update_frame(pad_recorder_info_ptr)
+        next_frame = (current_frame + 1) & 0xFFFFFFFF
+
         while recorder_state == RECORDER_MODE_RECORDING:
             # Get current update frame
             current_frame = dolphin_read_update_frame(pad_recorder_info_ptr)
-            if next_frame == -1:
-                next_frame = current_frame
-            if current_frame != next_frame:
+
+            if current_frame == ((next_frame - 1) & 0xFFFFFFFF):
                 continue
+            elif current_frame != next_frame:
+                print("Aborted recording due to a synchronization error!")
+                return
+
             next_frame = (current_frame + 1) & 0xFFFFFFFF
 
             # Still recording?
             recorder_state = dolphin_read_recorder_mode(pad_recorder_info_ptr)
+
             if recorder_state != RECORDER_MODE_RECORDING:
                 break
 
@@ -437,7 +369,7 @@ def record_pad_from_dolphin(output_folder_path: str, save_data_path: str, save_d
             current_packet_index += 1
 
         # Write eof header and align storage
-        write_packet_header(f, current_packet_index + 32, 192, 0)
+        write_packet_header(f, current_packet_index + 192, 0, 0)
         align_stream_32(f)
 
         print("Stopped recording!")
@@ -445,3 +377,7 @@ def record_pad_from_dolphin(output_folder_path: str, save_data_path: str, save_d
     dolphin_memory_engine.un_hook()
 
     print(f"Dumped {total_frames} KPAD frames (approx. {total_frames // 60} seconds) to '{pad_file_path}'.")
+
+
+def sleep_millis(millis: int):
+    time.sleep(millis / 1000)
