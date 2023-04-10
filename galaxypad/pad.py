@@ -299,7 +299,7 @@ def record_pad_from_dolphin(output_folder_path: str, addr_pad_recorder_info_ptr:
     print("Waiting for PadRecordHelper...")
 
     while recorder_state == RECORDER_MODE_WAITING:
-        sleep_millis(250)
+        sleep_millis(50)
         recorder_state = dolphin_read_recorder_mode(pad_recorder_info_ptr)
 
     if recorder_state == RECORDER_MODE_STOPPED:
@@ -311,7 +311,6 @@ def record_pad_from_dolphin(output_folder_path: str, addr_pad_recorder_info_ptr:
     game_data = truncate_game_data(game_data)
 
     while recorder_state == RECORDER_MODE_PREPARING:
-        sleep_millis(250)
         recorder_state = dolphin_read_recorder_mode(pad_recorder_info_ptr)
 
     # 5 - Get general information and prepare output
