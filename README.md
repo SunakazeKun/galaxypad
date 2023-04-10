@@ -13,7 +13,6 @@ There are gameplay-related aspects that Tip Networks and Cosmic Spirits don't ac
 
 - You should only record playback when playing as Mario. Both objects will be disabled when playing as Luigi.
 - Both objects disable the Star Pointer completely. Thus, Mario can't interact with objects that require the Star Pointer, for example Pull Stars and Grapple Flowers.
-- The game's pseudo-random number generator (PRNG) won't be reseeded to account for random events, such as enemies moving in random directions. Therefore, it can happen in some scenarios that the player gets damaged by enemies.
 
 # Usage
 In this section, it is assumed that the game you want to record player input in already uses Syati's *PadRecord* code. The general usage is this:
