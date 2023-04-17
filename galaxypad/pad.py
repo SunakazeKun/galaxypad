@@ -53,6 +53,17 @@ def dolphin_get_game_id() -> str:
     return dolphin_memory_engine.read_bytes(0, 4).decode("ascii")
 
 
+@validate_ptr("s32*")
+def dolphin_read_s32(ptr: int) -> int:
+    """
+    Reads a signed 32-bit integer at the specified address in Dolphin's emulated game memory and returns it.
+
+    :param ptr: the pointer to the signed 32-bit integer.
+    :return: the value read.
+    """
+    return dolphin_memory_engine.read_word(ptr)
+
+
 @validate_ptr("u32*")
 def dolphin_read_u32(ptr: int) -> int:
     """
@@ -65,11 +76,12 @@ def dolphin_read_u32(ptr: int) -> int:
 
 
 @validate_ptr("char*")
-def dolphin_read_cstring(ptr: int) -> str:
+def dolphin_read_cstring(ptr: int, encoding: str = "ascii") -> str:
     """
     Reads a C-string at the specified address in Dolphin's emulated game memory and returns it.
 
     :param ptr: the pointer to the C-string.
+    :param encoding: the string's encoding.
     :return: the value read.
     """
     chars = bytearray()
@@ -80,7 +92,7 @@ def dolphin_read_cstring(ptr: int) -> str:
             break
         else:
             chars.append(char)
-    return chars.decode("ascii")
+    return chars.decode(encoding)
 
 
 @validate_ptr("PadRecorderInfo*")
@@ -102,7 +114,7 @@ def dolphin_read_recorder_mode(pad_recorder_info_ptr: int) -> int:
     :param pad_recorder_info_ptr: the pointer to PadRecordInfo.
     :return: the value read.
     """
-    return dolphin_read_u32(pad_recorder_info_ptr + OFFSET_RECORDER_MODE)
+    return dolphin_read_s32(pad_recorder_info_ptr + OFFSET_RECORDER_MODE)
 
 
 @validate_ptr("PadRecorderInfo*")
@@ -125,7 +137,7 @@ def dolphin_read_restart_id(pad_recorder_info_ptr: int) -> int:
     :param pad_recorder_info_ptr: the pointer to PadRecordInfo.
     :return: the value read.
     """
-    return dolphin_read_u32(pad_recorder_info_ptr + OFFSET_RESTART_ID)
+    return dolphin_read_s32(pad_recorder_info_ptr + OFFSET_RESTART_ID)
 
 
 @validate_ptr("PadRecorderInfo*")
@@ -342,6 +354,7 @@ def record_pad_from_dolphin(output_folder_path: str, addr_pad_recorder_info_ptr:
                 continue
             elif current_frame != next_frame:
                 print("Aborted recording due to a synchronization error!")
+                dolphin_memory_engine.un_hook()
                 return
 
             next_frame = (current_frame + 1) & 0xFFFFFFFF
